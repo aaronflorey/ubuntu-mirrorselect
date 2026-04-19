@@ -2,114 +2,81 @@ package llog
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 )
 
-const (
-	LevelDebug = iota
-	LevelInfo
-	LevelWarn
-	LevelError
+var (
+	levelVar = &slog.LevelVar{}
+	logger   = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: levelVar}))
 )
 
-var (
-	debugLogger = log.New(os.Stderr, "DEBUG ", log.LstdFlags|log.Lmsgprefix)
-	infoLogger  = log.New(os.Stderr, "INFO  ", log.LstdFlags|log.Lmsgprefix)
-	warnLogger  = log.New(os.Stderr, "WARN  ", log.LstdFlags|log.Lmsgprefix)
-	errorLogger = log.New(os.Stderr, "ERROR ", log.LstdFlags|log.Lmsgprefix)
-	logLevel    = LevelWarn
-)
+func init() {
+	levelVar.Set(slog.LevelWarn)
+}
 
 func SetLogLevel(level string) error {
-	normalized := strings.ToUpper(level)
-	switch normalized {
+	switch strings.ToUpper(strings.TrimSpace(level)) {
 	case "DEBUG":
-		logLevel = LevelDebug
-		return nil
+		levelVar.Set(slog.LevelDebug)
 	case "INFO":
-		logLevel = LevelInfo
-		return nil
+		levelVar.Set(slog.LevelInfo)
 	case "WARN":
-		logLevel = LevelWarn
-		return nil
+		levelVar.Set(slog.LevelWarn)
 	case "ERROR":
-		logLevel = LevelError
-		return nil
+		levelVar.Set(slog.LevelError)
 	default:
 		return fmt.Errorf("invalid log level: %s", level)
 	}
+
+	return nil
 }
 
 func Debug(v ...interface{}) {
-	if logLevel <= LevelDebug {
-		debugLogger.Print(v...)
-	}
+	logger.Debug(fmt.Sprint(v...))
 }
 
 func Debugf(format string, v ...interface{}) {
-	if logLevel <= LevelDebug {
-		debugLogger.Printf(format, v...)
-	}
+	logger.Debug(fmt.Sprintf(format, v...))
 }
 
 func Debugln(v ...interface{}) {
-	if logLevel <= LevelDebug {
-		debugLogger.Println(v...)
-	}
+	logger.Debug(strings.TrimSuffix(fmt.Sprintln(v...), "\n"))
 }
 
 func Info(v ...interface{}) {
-	if logLevel <= LevelInfo {
-		infoLogger.Print(v...)
-	}
+	logger.Info(fmt.Sprint(v...))
 }
 
 func Infof(format string, v ...interface{}) {
-	if logLevel <= LevelInfo {
-		infoLogger.Printf(format, v...)
-	}
+	logger.Info(fmt.Sprintf(format, v...))
 }
 
 func Infoln(v ...interface{}) {
-	if logLevel <= LevelInfo {
-		infoLogger.Println(v...)
-	}
+	logger.Info(strings.TrimSuffix(fmt.Sprintln(v...), "\n"))
 }
 
 func Warn(v ...interface{}) {
-	if logLevel <= LevelWarn {
-		warnLogger.Print(v...)
-	}
+	logger.Warn(fmt.Sprint(v...))
 }
 
 func Warnf(format string, v ...interface{}) {
-	if logLevel <= LevelWarn {
-		warnLogger.Printf(format, v...)
-	}
+	logger.Warn(fmt.Sprintf(format, v...))
 }
 
 func Warnln(v ...interface{}) {
-	if logLevel <= LevelWarn {
-		warnLogger.Println(v...)
-	}
+	logger.Warn(strings.TrimSuffix(fmt.Sprintln(v...), "\n"))
 }
 
 func Error(v ...interface{}) {
-	if logLevel <= LevelError {
-		errorLogger.Print(v...)
-	}
+	logger.Error(fmt.Sprint(v...))
 }
 
 func Errorf(format string, v ...interface{}) {
-	if logLevel <= LevelError {
-		errorLogger.Printf(format, v...)
-	}
+	logger.Error(fmt.Sprintf(format, v...))
 }
 
 func Errorln(v ...interface{}) {
-	if logLevel <= LevelError {
-		errorLogger.Println(v...)
-	}
+	logger.Error(strings.TrimSuffix(fmt.Sprintln(v...), "\n"))
 }

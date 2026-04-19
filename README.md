@@ -6,6 +6,10 @@
 
 # MirrorSelect
 
+## Fork Attribution
+
+This repository is a maintained fork of the original upstream project at [haukened/mirrorselect](https://github.com/haukened/mirrorselect). Many thanks to the original author and contributors for the foundation this fork builds on.
+
 MirrorSelect is a command-line tool designed to help users select the best mirror for downloading packages. It tests the speed of various mirrors and suggests the fastest one for your location. Since the removal of `netselect` from the Ubuntu repositories, may users have been forced to use the mirror protocol.  This protocol, while useful, only test latency/priximity using a one-sided view of the world.  This leads to decent, but sub-optimal mirrors selections.
 
 ### MirrorSelect performs a series of actions to ensure you get the best mirrors:

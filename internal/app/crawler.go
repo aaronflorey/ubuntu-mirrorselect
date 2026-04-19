@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"strings"
@@ -9,9 +9,19 @@ import (
 	"github.com/gocolly/colly"
 )
 
-var currentCC string
+var launchpadCountryCodeAliases = map[string]string{
+	"IRAN, ISLAMIC REPUBLIC OF":    "IR",
+	"KOREA, REPUBLIC OF":           "KR",
+	"MACEDONIA, REPUBLIC OF":       "MK",
+	"MOLDOVA, REPUBLIC OF":         "MD",
+	"TANZANIA, UNITED REPUBLIC OF": "TZ",
+	"VIET NAM":                     "VN",
+}
 
 func crawlLaunchpad(desiredCC string) (mirrors []Mirror, err error) {
+	desiredCC = strings.ToUpper(strings.TrimSpace(desiredCC))
+	currentCC := ""
+
 	c := colly.NewCollector(
 		colly.AllowedDomains("launchpad.net"), // only visit launchpad.net
 		colly.MaxDepth(1),                     // only scrape the first page, dont recurse
@@ -30,9 +40,14 @@ func crawlLaunchpad(desiredCC string) (mirrors []Mirror, err error) {
 					case "Total":
 						return
 					default:
-						country := parseCountry(cName)
-						currentCC = country.Alpha2()
-						llog.Debugf("Updated country to %s (%s)", country.Info().Name, country.Alpha2())
+						countryCode, ok := parseCountryCode(cName)
+						if !ok {
+							currentCC = ""
+							llog.Warnf("Unable to map launchpad country heading %q to ISO-3166 country code", cName)
+							return
+						}
+						currentCC = countryCode
+						llog.Debugf("Updated country to %s", currentCC)
 					}
 				} else if cell.Attr("href") != "" {
 					link := cell.Attr("href")
@@ -53,10 +68,30 @@ func crawlLaunchpad(desiredCC string) (mirrors []Mirror, err error) {
 	return
 }
 
-func parseCountry(c string) countries.CountryCode {
-	cS := strings.Split(c, ",")
-	if len(cS) == 0 {
-		return countries.Unknown
+func parseCountryCode(country string) (string, bool) {
+	name := strings.TrimSpace(country)
+	if name == "" {
+		return "", false
 	}
-	return countries.ByName(cS[0])
+
+	code := countries.ByName(name)
+	if code != countries.Unknown {
+		return code.Alpha2(), true
+	}
+
+	parts := strings.SplitN(name, ",", 2)
+	baseName := strings.TrimSpace(parts[0])
+	if baseName != "" {
+		code = countries.ByName(baseName)
+		if code != countries.Unknown {
+			return code.Alpha2(), true
+		}
+	}
+
+	aliasCode, ok := launchpadCountryCodeAliases[strings.ToUpper(name)]
+	if ok {
+		return aliasCode, true
+	}
+
+	return "", false
 }
