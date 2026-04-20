@@ -107,17 +107,24 @@ func TestApplyMirrorToAPTTargetsCreatesBackupsAndWrites(t *testing.T) {
 		t.Fatalf("applyMirrorToAPTTargets returned error: %v", err)
 	}
 
-	if len(result.UpdatedFiles) != 2 || len(result.BackupFiles) != 2 {
+	if len(result.UpdatedFiles) != 1 || len(result.BackupFiles) != 1 {
 		t.Fatalf(
-			"applyMirrorToAPTTargets updated=%d backups=%d, want 2 and 2",
+			"applyMirrorToAPTTargets updated=%d backups=%d, want 1 and 1",
 			len(result.UpdatedFiles),
 			len(result.BackupFiles),
 		)
 	}
 
+	if result.UpdatedFiles[0] != deb822Path {
+		t.Fatalf("applyMirrorToAPTTargets updated %q, want %q", result.UpdatedFiles[0], deb822Path)
+	}
+
 	for _, backupPath := range result.BackupFiles {
 		if _, err := os.Stat(backupPath); err != nil {
 			t.Fatalf("expected backup file %s to exist: %v", backupPath, err)
+		}
+		if filepath.Base(filepath.Dir(backupPath)) != mirrorselectBackupDirName {
+			t.Fatalf("expected backup file %s to be stored in %s", backupPath, mirrorselectBackupDirName)
 		}
 	}
 
@@ -127,6 +134,39 @@ func TestApplyMirrorToAPTTargetsCreatesBackupsAndWrites(t *testing.T) {
 	}
 	if !strings.Contains(string(deb822Content), "noble-security") {
 		t.Fatalf("updated deb822 file missing security suite:\n%s", string(deb822Content))
+	}
+
+	legacyContent, err := os.ReadFile(legacyPath)
+	if err != nil {
+		t.Fatalf("failed to read updated legacy file: %v", err)
+	}
+	if string(legacyContent) != "legacy old\n" {
+		t.Fatalf("legacy file should remain unchanged when deb822 is present:\n%s", string(legacyContent))
+	}
+}
+
+func TestApplyMirrorToAPTTargetsFallsBackToLegacy(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	legacyPath := filepath.Join(dir, "sources.list")
+
+	if err := os.WriteFile(legacyPath, []byte("legacy old\n"), 0644); err != nil {
+		t.Fatalf("failed to write legacy fixture: %v", err)
+	}
+
+	targets := []aptSourceTarget{
+		{Path: filepath.Join(dir, "ubuntu.sources"), Format: aptSourceFormatDeb822},
+		{Path: legacyPath, Format: aptSourceFormatLegacy},
+	}
+
+	result, err := applyMirrorToAPTTargets("https://mirror.example/ubuntu/", "noble", targets)
+	if err != nil {
+		t.Fatalf("applyMirrorToAPTTargets returned error: %v", err)
+	}
+
+	if len(result.UpdatedFiles) != 1 || result.UpdatedFiles[0] != legacyPath {
+		t.Fatalf("applyMirrorToAPTTargets updated %v, want [%s]", result.UpdatedFiles, legacyPath)
 	}
 
 	legacyContent, err := os.ReadFile(legacyPath)

@@ -54,7 +54,7 @@ Important flags:
 - `--country`: ISO 3166-1 alpha-2 country code such as `US` or `DE`.
 - `--max`: maximum number of mirrors to benchmark by download speed.
 - `--interactive` / `-i`: show ranked mirrors with speed/latency and prompt to pick one.
-- `--apply`: write the selected mirror into APT source files (`/etc/apt/sources.list.d/ubuntu.sources` and `/etc/apt/sources.list`) after creating timestamped backups.
+- `--apply`: write the selected mirror into the active APT source file, preferring `/etc/apt/sources.list.d/ubuntu.sources` and falling back to `/etc/apt/sources.list`, after creating a timestamped backup.
 - `--output`: `text` (default) or `json`.
 - `--protocol`: `http`, `https`, or `any`.
 - `--release`: Ubuntu codename such as `noble`, `jammy`, or `focal`.

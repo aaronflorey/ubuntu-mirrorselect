@@ -22,6 +22,8 @@ var defaultAptSourceTargets = []aptSourceTarget{
 	{Path: "/etc/apt/sources.list", Format: aptSourceFormatLegacy},
 }
 
+const mirrorselectBackupDirName = ".mirrorselect-backups"
+
 type aptSourceTarget struct {
 	Path   string
 	Format string
@@ -56,14 +58,16 @@ func applyMirrorToAPTTargets(
 		return aptApplyResult{}, err
 	}
 
+	selectedTargets, err := selectAptSourceTargets(targets)
+	if err != nil {
+		return aptApplyResult{}, err
+	}
+
 	result := aptApplyResult{MirrorURI: mirrorURI}
 
-	for _, target := range targets {
+	for _, target := range selectedTargets {
 		info, err := os.Stat(target.Path)
 		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
 			return aptApplyResult{}, fmt.Errorf("failed to inspect %s: %w", target.Path, err)
 		}
 
@@ -90,11 +94,40 @@ func applyMirrorToAPTTargets(
 		result.BackupFiles = append(result.BackupFiles, backupPath)
 	}
 
-	if len(result.UpdatedFiles) == 0 {
-		return aptApplyResult{}, errors.New("no APT source files found to update")
+	return result, nil
+}
+
+func selectAptSourceTargets(targets []aptSourceTarget) ([]aptSourceTarget, error) {
+	var existingDeb822 []aptSourceTarget
+	var existingLegacy []aptSourceTarget
+
+	for _, target := range targets {
+		if _, err := os.Stat(target.Path); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, fmt.Errorf("failed to inspect %s: %w", target.Path, err)
+		}
+
+		switch target.Format {
+		case aptSourceFormatDeb822:
+			existingDeb822 = append(existingDeb822, target)
+		case aptSourceFormatLegacy:
+			existingLegacy = append(existingLegacy, target)
+		default:
+			return nil, fmt.Errorf("unsupported APT source format %q", target.Format)
+		}
 	}
 
-	return result, nil
+	if len(existingDeb822) > 0 {
+		return existingDeb822, nil
+	}
+
+	if len(existingLegacy) > 0 {
+		return existingLegacy, nil
+	}
+
+	return nil, errors.New("no APT source files found to update")
 }
 
 func normalizeAptMirrorURI(mirrorURL string) (string, error) {
@@ -167,7 +200,15 @@ func createBackup(path string, perm os.FileMode) (string, error) {
 		return "", fmt.Errorf("failed to read %s for backup: %w", path, err)
 	}
 
-	backupPath := fmt.Sprintf("%s.mirrorselect.bak.%s", path, time.Now().Format("20060102T150405"))
+	backupDir := filepath.Join(filepath.Dir(path), mirrorselectBackupDirName)
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create backup directory %s: %w", backupDir, err)
+	}
+
+	backupPath := filepath.Join(
+		backupDir,
+		fmt.Sprintf("%s.mirrorselect.bak.%s", filepath.Base(path), time.Now().Format("20060102T150405")),
+	)
 	if err := os.WriteFile(backupPath, data, perm); err != nil {
 		return "", fmt.Errorf("failed to write backup %s: %w", backupPath, err)
 	}
