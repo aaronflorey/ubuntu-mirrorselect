@@ -414,7 +414,7 @@ func run(cfg *cliConfig) error {
 		// grab the pointer to the mirror so it can self-update
 		mirror := &mirrors[idx]
 		// test the download speed of the mirror
-		mirror.TestDownload(cfg.Release)
+		mirror.TestDownload(cfg.Release, cfg.Arch)
 	}
 
 	sort.Sort(ByTransferSpeed(mirrors))

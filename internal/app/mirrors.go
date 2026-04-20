@@ -55,6 +55,10 @@ func (m Mirror) bps() float64 {
 	return float64(m.Size) / m.Time
 }
 
+func downloadProbePath(dist string, arch string) string {
+	return fmt.Sprintf("dists/%s/main/binary-%s/Packages.gz", dist, arch)
+}
+
 // TestLatency tests the latency of a mirror by sending a HEAD request to the
 // mirror's /dists/<dist>/Release file. It sets the mirror's Latency field to
 // the time taken to receive a response in milliseconds.
@@ -90,10 +94,9 @@ func (m *Mirror) TestLatency(timeout int, dist string) {
 	llog.Debugf("%3d ms %s", m.Latency, m.URL.Hostname())
 }
 
-func (m *Mirror) TestDownload(dist string) {
+func (m *Mirror) TestDownload(dist string, arch string) {
 	client := http.Client{Timeout: 2 * time.Second}
-	// the Release file is guaranteed to be there regardless of release, or arch
-	target := fmt.Sprintf("%sdists/%s/Release", m.URL.String(), dist)
+	target := fmt.Sprintf("%s%s", m.URL.String(), downloadProbePath(dist, arch))
 	start := time.Now()
 	resp, err := client.Get(target)
 	if err != nil {
