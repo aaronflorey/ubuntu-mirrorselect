@@ -1,44 +1,53 @@
 # Contributing to MirrorSelect
 
-Thank you for considering contributing to MirrorSelect! We welcome contributions from everyone. By participating in this project, you agree to abide by the [code of conduct](CODE_OF_CONDUCT.md).
+Thanks for contributing. By participating in this project, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## How to Contribute
+## Development Setup
 
-### Reporting Bugs
+```sh
+git clone https://github.com/aaronflorey/ubuntu-mirrorselect.git
+cd ubuntu-mirrorselect
+lefthook install
+go test ./...
+```
 
-If you find a bug, please report it by opening an issue on our [GitHub Issues](https://github.com/haukened/mirrorselect/issues) page. Include as much detail as possible to help us understand and reproduce the issue.
+## Before Opening a Pull Request
 
-### Suggesting Enhancements
+Run the local checks:
 
-We welcome suggestions for new features or improvements. Please open an issue on our [GitHub Issues](https://github.com/haukened/mirrorselect/issues) page and describe your idea in detail.
+```sh
+gofmt -w .
+amber build scripts/install-latest-release.ab install.sh
+go vet ./...
+go test ./...
+```
 
-### Submitting Pull Requests
+Update nearby tests and documentation when behavior changes.
 
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature-branch`).
-3. Make your changes.
-4. Commit your changes (`git commit -m 'Add some feature'`).
-5. Push to the branch (`git push origin feature-branch`).
-6. Open a pull request on the original repository.
+Lefthook uses `lefthook.yml` to rebuild `install.sh` from `scripts/install-latest-release.ab` on `pre-commit` and to run the main Go checks on `pre-push`.
 
-### Code Style
+## Commit Style
 
-Please ensure your code adheres to the suggested golang coding standards. This includes proper formatting, naming conventions, and documentation.
+This repository uses conventional commits so release automation can generate release notes and version bumps.
 
-### Testing
+Examples:
 
-If applicable, please include tests with your pull request. Ensure all existing and new tests pass before submitting your pull request.
+- `feat: add country validation`
+- `fix: handle empty mirror results`
+- `docs: clarify Linux-only auto-detection`
 
-### Documentation
+## Reporting Issues
 
-Update documentation to reflect any changes or new features. This includes updating the README.md and any other relevant documentation files.
+- Bugs and feature requests: open an issue at [github.com/aaronflorey/ubuntu-mirrorselect/issues](https://github.com/aaronflorey/ubuntu-mirrorselect/issues).
+- Security issues: follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
-## Code of Conduct
+## Pull Requests
 
-Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to ensure a welcoming and inclusive environment for everyone.
+1. Create a branch for your change.
+2. Keep the change focused.
+3. Add or update tests when needed.
+4. Open a pull request with a clear summary of the problem and fix.
 
 ## License
 
-By contributing to MirrorSelect, you agree that your contributions will be licensed under the [GNU GPL v3](LICENSE).
-
-Thank you for your contributions!
+By contributing to MirrorSelect, you agree that your contributions will be licensed under the [MIT License](LICENSE).

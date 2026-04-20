@@ -63,6 +63,7 @@ func (m *Mirror) TestLatency(timeout int, dist string) {
 	if m.URL.String() == "" {
 		m.Valid = false
 		llog.Errorf("empty URL for mirror %v", m)
+		return
 	}
 	client := http.Client{Timeout: time.Duration(timeout) * time.Millisecond}
 	target := fmt.Sprintf("%sdists/%s/Release", m.URL.String(), dist)
@@ -78,6 +79,11 @@ func (m *Mirror) TestLatency(timeout int, dist string) {
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
+		llog.Debugf("%s returned unexpected status %d", target, resp.StatusCode)
+		m.Valid = false
+		return
+	}
 	elapsed := time.Since(start)
 	m.Latency = elapsed.Milliseconds()
 	m.Valid = true
@@ -96,6 +102,11 @@ func (m *Mirror) TestDownload(dist string) {
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusBadRequest {
+		llog.Debugf("%s returned unexpected status %d", target, resp.StatusCode)
+		m.Valid = false
+		return
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		llog.Errorf("failed to read response body: %s", err)
