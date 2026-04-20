@@ -1,0 +1,32 @@
+output:
+  - summary
+  - success
+  - failure
+  - execution
+  - skips
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: build installer
+      glob:
+        - scripts/install-latest-release.ab
+      run: amber build scripts/install-latest-release.ab install.sh && chmod +x install.sh
+      stage_fixed: true
+    - name: gofmt
+      glob: "**/*.go"
+      run: gofmt -w {staged_files}
+      stage_fixed: true
+
+pre-push:
+  jobs:
+    - name: check installer
+      run: amber check scripts/install-latest-release.ab && amber build scripts/install-latest-release.ab install.sh && chmod +x install.sh
+    - name: install smoke test
+      run: ./scripts/test-install.sh
+    - name: go vet
+      run: go vet ./...
+    - name: go test
+      run: go test ./...
+    - name: go build
+      run: go build ./...

@@ -9,10 +9,10 @@ base: core24
 confinement: strict
 donation: https://beer.hauken.us
 grade: stable
-issues: https://github.com/haukened/mirrorselect/issues
-license: GPL-3.0-or-later
+issues: https://github.com/aaronflorey/ubuntu-mirrorselect/issues
+license: MIT
 type: app
-website: https://github.com/haukened/mirrorselect
+website: https://github.com/aaronflorey/ubuntu-mirrorselect
 
 platforms:
   amd64:
@@ -29,7 +29,7 @@ parts:
   mirrorselect:
     plugin: go
     build-snaps: [go/1.23/stable]
-    source: https://github.com/haukened/mirrorselect
+    source: https://github.com/aaronflorey/ubuntu-mirrorselect
     source-type: git
     source-branch: main
     override-pull: |

@@ -1,108 +1,105 @@
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/haukened/mirrorselect/dev.yml) ](https://github.com/haukened/mirrorselect/actions)
-[![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/haukened/mirrorselect)](https://github.com/haukened/mirrorselect/issues)
-[![GitHub License](https://img.shields.io/github/license/haukened/mirrorselect)](https://github.com/haukened/mirrorselect/blob/main/LICENSE)
-[![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/haukened/mirrorselect)](https://go.dev/dl/)
-[![GitHub Release](https://img.shields.io/github/v/release/haukened/mirrorselect)](https://github.com/haukened/mirrorselect/releases)
+[![License](https://img.shields.io/github/license/aaronflorey/ubuntu-mirrorselect?style=flat)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/aaronflorey/ubuntu-mirrorselect/ci.yaml?branch=main&style=flat&label=ci)](https://github.com/aaronflorey/ubuntu-mirrorselect/actions/workflows/ci.yaml)
+[![Release](https://img.shields.io/github/v/release/aaronflorey/ubuntu-mirrorselect?display_name=tag&sort=semver&style=flat)](https://github.com/aaronflorey/ubuntu-mirrorselect/releases)
 
 # MirrorSelect
 
-## Fork Attribution
+MirrorSelect is a command-line tool that ranks Ubuntu archive mirrors by TCP latency and download speed so you can choose a faster package mirror.
 
-This repository is a maintained fork of the original upstream project at [haukened/mirrorselect](https://github.com/haukened/mirrorselect). Many thanks to the original author and contributors for the foundation this fork builds on.
+This repository is a maintained fork of the original upstream project at [haukened/mirrorselect](https://github.com/haukened/mirrorselect).
 
-MirrorSelect is a command-line tool designed to help users select the best mirror for downloading packages. It tests the speed of various mirrors and suggests the fastest one for your location. Since the removal of `netselect` from the Ubuntu repositories, may users have been forced to use the mirror protocol.  This protocol, while useful, only test latency/priximity using a one-sided view of the world.  This leads to decent, but sub-optimal mirrors selections.
+## Why MirrorSelect
 
-### MirrorSelect performs a series of actions to ensure you get the best mirrors:
-
-1. Mirrors are sourced from the [Launchpad Mirror List](https://launchpad.net/ubuntu/+archivemirrors) instead of the [Ubuntu Mirrors Service](http://mirrors.ubuntu.com/).
-    1. The Ubuntu Mirrors service does not return the same mirrors every time its accessed, due to the fact it is guessing proximity to your GeoIP location and other factors.  This means that the results may be incomplete or different each time its run.
-    1. Launchpad has the most up-to-date and complete information on operational official mirrors.
-1. Every mirror (in the selected country) is tested for TCP latency instead of ICMP
-    1. TCP Latency tests the amount of time it takes for the web server to complete the HTTP request.
-    1. Other tools using ICMP latency only test the time the network takes, not how long it takes for the server to process the request.
-1. Once the mirrors are ranked by TCP latency for responsiveness, the top `N` servers are then ranked by download speed.
-    1. This ensures that you're actually getting the fastest server, not _just_ the quickest one to respond.
-    1. Even servers that respond quickly might have lower download speeds due to congestion, or other factors.
-
-## Features
-
-- Automatically selects the fastest mirror
-- GeoIP support for automatic country selection, or manual options for privacy.
-- Supports protocol selection (HTTP, HTTPS, any)
-- Easy to use command-line interface
-- Sane defaults
+- Uses the Launchpad mirror list instead of the smaller mirror redirect service.
+- Measures TCP responsiveness instead of ICMP latency alone.
+- Re-checks the best candidates by download speed before printing results.
 
 ## Installation
 
-To install MirrorSelect, you can choose one of the following options:
+Homebrew cask (after the first tagged release):
 
-1. Snapcraft.io
+```sh
+brew install --cask aaronflorey/tap/mirrorselect
+```
 
-    [![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/mirrorselect)
+Source build:
 
-4. Installing with go:
-    
-    ```
-    go install github.com/haukened/mirrorselect@latest
-    ```
+```sh
+git clone https://github.com/aaronflorey/ubuntu-mirrorselect.git
+cd ubuntu-mirrorselect
+go build -o mirrorselect .
+```
 
-5. Compiling from source:
+GitHub releases:
 
-    ```
-    git clone https://github.com/haukened/mirrorselect
-    cd mirrorselect
-    go get -u ./...
-    go build
-    ./mirrorselect -h
-    ```
+- Download a prebuilt archive from the [Releases](https://github.com/aaronflorey/ubuntu-mirrorselect/releases) page.
+- Run `curl -fsSL https://raw.githubusercontent.com/aaronflorey/ubuntu-mirrorselect/main/install.sh | bash` to install the latest release for the current host into `~/.local/bin`.
+- If you prefer the Amber source, run `amber run scripts/install-latest-release.ab`.
+
+## Setup
+
+- MirrorSelect is intended for Ubuntu hosts and verifies that the running system is Ubuntu.
+- On Ubuntu systems, MirrorSelect auto-detects the release codename from `/etc/os-release`, `/etc/lsb-release`, or `lsb_release -cs`.
+- If you do not want GeoIP-based country detection, pass `--country` explicitly.
 
 ## Usage
-
-MirrorSelect provides several command-line flags to customize its behavior:
 
 ```sh
 mirrorselect [flags]
 ```
 
-### Command-Line Flags
+Important flags:
 
-- `-a`, `--arch`: Select the CPU architecture (default: current system)
-- `-c`, `--country`: Filter mirrors by ISO 3166 Alpha-2 country code (Default: Auto-Detect). Options: ISO-3166 Alpha-2 Country Codes.. `US`, `DE`, etc..
-- `-h`, `--help`: Display the help message and exit.
-- `-m`, `-max`: The max number of servers to perform download speed tests (Default 5)
-- `-p`, `--protocol`: Specify the protocol to use (default: ANY). Options: `http`, `https`, `any`.
-- `-r`, `--release`: Specify the ubuntu release (Default: Current). Options: Ubuntu codenames e.g. `noble`, `jammy`, `focal`, etc...
-- `-t`, `--timeout`: Set the timeout for each mirror latency test in milliseconds (default: 500ms).
-- `-v`, `--verbosity`: Show verbose information (Default: WARN) Options: DEBUG, INFO, WARN, ERROR.
+- `--arch`: mirror architecture to target.
+- `--country`: ISO 3166-1 alpha-2 country code such as `US` or `DE`.
+- `--max`: maximum number of mirrors to benchmark by download speed.
+- `--interactive` / `-i`: show ranked mirrors with speed/latency and prompt to pick one.
+- `--apply`: write the selected mirror into APT source files (`/etc/apt/sources.list.d/ubuntu.sources` and `/etc/apt/sources.list`) after creating timestamped backups.
+- `--output`: `text` (default) or `json`.
+- `--protocol`: `http`, `https`, or `any`.
+- `--release`: Ubuntu codename such as `noble`, `jammy`, or `focal`.
+- `--timeout`: latency timeout in milliseconds.
+- `--verbosity`: `DEBUG`, `INFO`, `WARN`, or `ERROR`.
+- `--yes`: skip confirmation prompt when using `--apply`.
 
-## Examples
+Note:
 
-Select the fastest mirror using default settings:
+- MirrorSelect only updates APT files when you pass `--apply`.
+- If `--apply` is used without root privileges, MirrorSelect re-runs itself with `sudo` and forwards prompts/output.
+- `--apply` writes entries for `release`, `release-updates`, `release-backports`, and `release-security`, and includes both `deb` and `deb-src` source types.
+
+Examples:
 
 ```sh
 mirrorselect
-```
-
-Select the fastest HTTPS mirror in the US:
-
-```sh
 mirrorselect --protocol https --country US
+mirrorselect --release noble --country GB --max 5 --timeout 800
+mirrorselect --country US --protocol https --max 5 --interactive
+mirrorselect --country US --output json
+sudo mirrorselect --country US --interactive --apply
 ```
 
-Test 5 mirrors with a timeout of 800ms:
+## Development
 
 ```sh
-mirrorselect --max 5 --timeout 800
+lefthook install
+gofmt -w .
+go vet ./...
+go test ./...
 ```
 
-## Contributing
+Lefthook keeps `install.sh` compiled from `scripts/install-latest-release.ab` on `pre-commit`, and runs `go vet`, `go test`, and `go build` on `pre-push`.
 
-Contributions are welcome! Please read the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
+## Releases
+
+- CI runs on pushes and pull requests to `main` and `master`.
+- `release-please` opens or updates the release PR from conventional commits.
+- Merging the release PR creates a `vX.X.X` tag, publishes GitHub release archives, and updates the Homebrew tap cask.
+
+## Security
+
+Please see [SECURITY.md](SECURITY.md).
 
 ## License
 
-This project is licensed under the GNU GPL v3 License. See the [LICENSE](LICENSE) file for details.
-
-## Contact
-
-For any questions or suggestions, please open an issue on GitHub.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

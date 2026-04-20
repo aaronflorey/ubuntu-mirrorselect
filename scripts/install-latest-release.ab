@@ -1,0 +1,278 @@
+#!/usr/bin/env amber
+
+import { env_var_get, is_command } from "std/env"
+import { dir_create, dir_exists, file_chmod, file_exists, file_extract, temp_dir_create } from "std/fs"
+import { file_download } from "std/http"
+import { ends_with, lowercase, parse_int, replace_one, slice, split, starts_with, text_contains, trim } from "std/text"
+
+const DEFAULT_HOST = "github.com"
+const DEFAULT_SLUG = "aaronflorey/ubuntu-mirrorselect"
+const BINARY_NAME = "mirrorselect"
+
+fun default_repo(): [Text] {
+    return [DEFAULT_HOST, DEFAULT_SLUG]
+}
+
+fun strip_git_suffix(value: Text): Text {
+    if ends_with(value, ".git") {
+        return slice(value, 0, len(value) - 4)
+    }
+
+    return value
+}
+
+fun strip_port(authority: Text): Text {
+    if starts_with(authority, "[") {
+        return authority
+    }
+
+    let parts = split(authority, ":")
+    if len(parts) != 2 {
+        return authority
+    }
+
+    parse_int(parts[1]) failed {
+        return authority
+    }
+
+    return parts[0]
+}
+
+fun join_from_index(parts: [Text], start: Int): Text {
+    let result = ""
+
+    for index, part in parts {
+        if index < start {
+            continue
+        }
+
+        if result == "" {
+            result = part
+            continue
+        }
+
+        result += "/{part}"
+    }
+
+    return result
+}
+
+fun parse_remote(remote: Text): [Text]? {
+    let cleaned = strip_git_suffix(trim(remote))
+
+    if starts_with(cleaned, "git@") {
+        let without_user = replace_one(cleaned, "git@", "")
+        let parts = split(without_user, ":")
+        if len(parts) != 2 {
+            fail 1
+        }
+
+        return [parts[0], parts[1]]
+    }
+
+    if starts_with(cleaned, "ssh://") {
+        let without_scheme = replace_one(cleaned, "ssh://", "")
+        let path_parts = split(without_scheme, "/")
+        if len(path_parts) < 3 {
+            fail 1
+        }
+
+        let authority_parts = split(path_parts[0], "@")
+        let host = strip_port(authority_parts[len(authority_parts) - 1])
+        let slug = join_from_index(path_parts, 1)
+        return [host, slug]
+    }
+
+    if starts_with(cleaned, "https://") or starts_with(cleaned, "http://") {
+        let without_scheme = starts_with(cleaned, "https://")
+            then replace_one(cleaned, "https://", "")
+            else replace_one(cleaned, "http://", "")
+        let path_parts = split(without_scheme, "/")
+        if len(path_parts) < 3 {
+            fail 1
+        }
+
+        let slug = join_from_index(path_parts, 1)
+        return [path_parts[0], slug]
+    }
+
+    fail 1
+}
+
+fun detect_repo(): [Text] {
+    if not is_command("git") {
+        return default_repo()
+    }
+
+    let remote = $ git remote get-url origin $ failed {
+        let upstream = $ git remote get-url upstream $ failed {
+            return default_repo()
+        }
+
+        return parse_remote(upstream) failed {
+            return default_repo()
+        }
+    }
+
+    return parse_remote(remote) failed {
+        return default_repo()
+    }
+}
+
+fun normalize_os(raw: Text): Text? {
+    let value = lowercase(trim(raw))
+
+    if {
+        value == "linux": return "linux"
+        value == "darwin": return "darwin"
+        starts_with(value, "msys") or starts_with(value, "mingw") or starts_with(value, "cygwin"): return "windows"
+        else: fail 1
+    }
+}
+
+fun normalize_arch(raw: Text): Text? {
+    let value = lowercase(trim(raw))
+
+    if {
+        value == "x86_64": return "amd64"
+        value == "amd64": return "amd64"
+        value == "aarch64": return "arm64"
+        value == "arm64": return "arm64"
+        starts_with(value, "arm64"): return "arm64"
+        else: fail 1
+    }
+}
+
+fun detect_target(): [Text]? {
+    let raw_os = $ uname -s $?
+    let raw_arch = $ uname -m $?
+
+    let os = normalize_os(raw_os) failed {
+        echo "Unsupported operating system: {trim(raw_os)}"
+        fail 1
+    }
+
+    if os == "windows" {
+        echo "Windows hosts are not supported by this installer because it installs into ~/.local/bin"
+        fail 1
+    }
+
+    let arch = normalize_arch(raw_arch) failed {
+        echo "Unsupported architecture: {trim(raw_arch)}"
+        fail 1
+    }
+
+    return [os, arch]
+}
+
+fun release_base_url(host: Text, slug: Text): Text {
+    return env_var_get("MIRRORSELECT_INSTALLER_BASE_URL") failed {
+        return "https://{host}/{slug}"
+    }
+}
+
+fun resolve_latest_release_url(host: Text, slug: Text): Text? {
+    if not is_command("python3") {
+        echo "Need python3 to resolve the latest release URL"
+        fail 1
+    }
+
+    let base_url = release_base_url(host, slug)
+    let release_url = "{base_url}/releases/latest"
+    let resolved = $ python3 -c "import sys, urllib.request as u; req = u.Request(sys.argv[1], headers=dict([('User-Agent', 'mirrorselect-installer')])); response = u.urlopen(req); print(response.geturl()); response.close()" "{release_url}" $?
+    return resolved
+}
+
+fun extract_tag(latest_url: Text): Text? {
+    let cleaned = trim(latest_url)
+    if ends_with(cleaned, "/releases") or ends_with(cleaned, "/releases/latest") {
+        fail 2
+    }
+
+    if not text_contains(cleaned, "/releases/tag/") {
+        fail 1
+    }
+
+    let parts = split(cleaned, "/")
+    let tag = parts[len(parts) - 1]
+    if tag == "" and len(parts) > 1 {
+        tag = parts[len(parts) - 2]
+    }
+
+    if tag == "" {
+        fail 1
+    }
+
+    return tag
+}
+
+fun build_asset_name(tag: Text, os: Text, arch: Text): Text {
+    let version = starts_with(tag, "v") then slice(tag, 1) else tag
+    return "{BINARY_NAME}_{version}_{os}_{arch}.tar.gz"
+}
+
+fun ensure_bin_dir(): Text? {
+    let home = env_var_get("HOME") failed {
+        echo "HOME is not set"
+        fail 1
+    }
+
+    let bin_dir = "{home}/.local/bin"
+    if not dir_exists(bin_dir) {
+        dir_create(bin_dir)?
+    }
+
+    return bin_dir
+}
+
+main {
+    let repo = detect_repo()
+    let host = repo[0]
+    let slug = repo[1]
+
+    let target = detect_target()?
+    let os = target[0]
+    let arch = target[1]
+
+    let latest_url = resolve_latest_release_url(host, slug) failed {
+        echo "Failed to resolve the latest release for {host}/{slug}"
+        fail 1
+    }
+
+    let tag = extract_tag(latest_url) failed(code) {
+        if code == 2 {
+            echo "No published release was found for {host}/{slug}"
+            fail 1
+        }
+
+        echo "Resolved latest release URL has an unsupported layout: {latest_url}"
+        fail 1
+    }
+
+    let archive_name = build_asset_name(tag, os, arch)
+    let base_url = release_base_url(host, slug)
+    let download_url = "{base_url}/releases/download/{tag}/{archive_name}"
+    let bin_dir = ensure_bin_dir()?
+    let install_path = "{bin_dir}/{BINARY_NAME}"
+    let temp_dir = temp_dir_create("mirrorselect-release.XXXXXXXXXX", true, true)?
+    let archive_path = "{temp_dir}/{archive_name}"
+
+    echo "Downloading {download_url}"
+    file_download(download_url, archive_path) failed {
+        echo "Failed to download archive: {archive_name}"
+        fail 1
+    }
+
+    file_extract(archive_path, temp_dir)?
+
+    let extracted_binary = "{temp_dir}/{BINARY_NAME}"
+    if not file_exists(extracted_binary) {
+        echo "Archive did not contain {BINARY_NAME} at the expected path"
+        fail 1
+    }
+
+    $ cp "{extracted_binary}" "{install_path}" $?
+    file_chmod(install_path, "755")?
+
+    echo "Installed {BINARY_NAME} {tag} to {install_path}"
+}
